@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import Button from 'primevue/button';
 import Slider from 'primevue/slider';
 import InputText from 'primevue/inputtext';
@@ -10,6 +10,7 @@ const startupDelay = ref(15000);
 const pinnedGroups = ref<string[]>(['arc-tabs']);
 const groupNameInput = ref('');
 const status = ref({ message: '', type: '' as 'success' | 'error' | '', visible: false });
+const loaded = ref(false);
 
 const dragSrcIndex = ref<number | null>(null);
 const dragOverIndex = ref<number | null>(null);
@@ -42,8 +43,23 @@ onMounted(() => {
   browser.storage.sync.get({ startupDelay: 15000, pinnedGroups: ['arc-tabs'] }, (s) => {
     startupDelay.value = s.startupDelay as number;
     pinnedGroups.value = s.pinnedGroups ? Object.values(s.pinnedGroups) as string[] : ['arc-tabs'];
+    loaded.value = true;
   });
 });
+
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+function persistSettings() {
+  if (!loaded.value) return;
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    browser.storage.sync.set({ startupDelay: startupDelay.value, pinnedGroups: pinnedGroups.value }, () => {
+      browser.runtime.sendMessage({ action: 'updateSettings', startupDelay: startupDelay.value });
+    });
+  }, 300);
+}
+
+watch(startupDelay, persistSettings);
+watch(pinnedGroups, persistSettings, { deep: true });
 
 function delaySeconds() {
   return Math.round(startupDelay.value / 1000);
@@ -61,17 +77,6 @@ function removeGroup(name: string) {
   pinnedGroups.value = pinnedGroups.value.filter(g => g !== name);
 }
 
-function saveSettings() {
-  const delay = startupDelay.value;
-  if (delay < 10000 || delay > 60000) {
-    showStatus('Valid range: 10000–60000 ms', 'error');
-    return;
-  }
-  browser.storage.sync.set({ startupDelay: delay, pinnedGroups: pinnedGroups.value }, () => {
-    showStatus('Settings saved!', 'success');
-    browser.runtime.sendMessage({ action: 'updateSettings', startupDelay: delay });
-  });
-}
 
 function createArcGroup() {
   browser.runtime.sendMessage({ action: 'createArcGroup' }, (response) => {
@@ -144,9 +149,9 @@ function showStatus(message: string, type: 'success' | 'error') {
         </div>
       </div>
 
-      <Button label="Save settings" @click="saveSettings" fluid />
-
       <div class="action-row">
+        <Button label="Arrange groups" severity="secondary" @click="movePinnedGroups" fluid />
+
         <Button
           label="Create arc-tabs group"
           severity="secondary"
@@ -154,7 +159,6 @@ function showStatus(message: string, type: 'success' | 'error') {
           fluid
           v-tooltip.top="'Creates an arc-tabs tab group with one empty tab for scroll control. If deleted, recreated automatically.'"
         />
-        <Button label="Move groups to start" severity="secondary" @click="movePinnedGroups" fluid />
       </div>
 
       <Message v-if="status.visible" :severity="status.type === 'success' ? 'success' : 'error'" :closable="false">

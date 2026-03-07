@@ -87,9 +87,13 @@ export default defineBackground(() => {
     }, settings.startupDelay);
   });
 
-  browser.tabs.onCreated.addListener((tab) => {
+  browser.tabs.onCreated.addListener(async (tab) => {
     if (isRestoringSession) return;
-    if (tab.openerTabId !== undefined && tab.pendingUrl !== 'chrome://newtab/') return;
+
+    if (tab.openerTabId !== undefined && tab.pendingUrl !== 'chrome://newtab/') {
+      const openerTab = await browser.tabs.get(tab.openerTabId);
+      if (!openerTab.pinned) return;
+    }
 
     setTimeout(() => {
       browser.tabs.get(tab.id!, (currentTab) => {
