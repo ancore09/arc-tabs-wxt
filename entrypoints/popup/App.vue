@@ -6,11 +6,46 @@ import InputText from 'primevue/inputtext';
 import Chip from 'primevue/chip';
 import Message from 'primevue/message';
 
+const isDark = ref(localStorage.getItem('theme') !== 'light');
+
+function toggleTheme() {
+  isDark.value = !isDark.value;
+  document.documentElement.classList.toggle('dark', isDark.value);
+  localStorage.setItem('theme', isDark.value ? 'dark' : 'light');
+}
+
 const startupDelay = ref(15000);
 const pinnedGroups = ref<string[]>(['arc-tabs']);
 const groupNameInput = ref('');
 const status = ref({ message: '', type: '' as 'success' | 'error' | '', visible: false });
 const loaded = ref(false);
+
+const GROUP_COLORS: Record<string, string> = {
+  grey:   '#9aa0a6',
+  blue:   '#4285f4',
+  red:    '#ea4335',
+  yellow: '#fbbc04',
+  green:  '#34a853',
+  pink:   '#f97ef6',
+  purple: '#af5cf7',
+  cyan:   '#24c1e0',
+  orange: '#fa903e',
+};
+
+const groupColorMap = ref<Record<string, string>>({});
+
+async function loadGroupColors() {
+  const groups = await browser.tabGroups.query({});
+  const map: Record<string, string> = {};
+  groups.forEach(g => { if (g.title && g.color) map[g.title] = g.color; });
+  groupColorMap.value = map;
+}
+
+function chipStyle(name: string) {
+  const chromeName = groupColorMap.value[name];
+  const color = chromeName ? GROUP_COLORS[chromeName] : undefined;
+  return color ? { borderLeft: `3px solid ${color}`, paddingLeft: '10px' } : {};
+}
 
 const dragSrcIndex = ref<number | null>(null);
 const dragOverIndex = ref<number | null>(null);
@@ -45,6 +80,7 @@ onMounted(() => {
     pinnedGroups.value = s.pinnedGroups ? Object.values(s.pinnedGroups) as string[] : ['arc-tabs'];
     loaded.value = true;
   });
+  loadGroupColors();
 });
 
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -101,8 +137,16 @@ function showStatus(message: string, type: 'success' | 'error') {
 <template>
   <div class="popup">
     <div class="header">
-      <h2>Arc Tabs</h2>
-      <small>Long live the Arc browser</small>
+      <div>
+        <h2>Arc Tabs</h2>
+        <small>Long live the Arc browser</small>
+      </div>
+      <Button
+        :icon="isDark ? 'pi pi-sun' : 'pi pi-moon'"
+        text
+        rounded
+        @click="toggleTheme"
+      />
     </div>
 
     <div class="content">
@@ -144,7 +188,7 @@ function showStatus(message: string, type: 'success' | 'error') {
             @drop="onDrop"
             @dragend="onDragEnd"
           >
-            <Chip :label="name" removable @remove="removeGroup(name)" />
+            <Chip :label="name" removable @remove="removeGroup(name)" :pt="{ root: { style: chipStyle(name) } }" />
           </div>
         </div>
       </div>
@@ -180,8 +224,9 @@ function showStatus(message: string, type: 'success' | 'error') {
 
 .header {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .content {
@@ -213,6 +258,11 @@ function showStatus(message: string, type: 'success' | 'error') {
 
 .chip-wrapper:active {
   cursor: grabbing;
+}
+
+:deep(.p-slider-handle) {
+  background: var(--p-primary-color) !important;
+  border-color: var(--p-primary-color) !important;
 }
 
 .chip-wrapper.drag-over {

@@ -1,11 +1,13 @@
 import { createApp } from 'vue';
 import './style.css';
+import 'primeicons/primeicons.css';
 import App from './App.vue';
 import PrimeVue from 'primevue/config';
 import Tooltip from 'primevue/tooltip';
 import Aura from '@primeuix/themes/aura';
 
-document.documentElement.classList.add('dark');
+const savedTheme = localStorage.getItem('theme');
+if (savedTheme !== 'light') document.documentElement.classList.add('dark');
 
 const app = createApp(App);
 app.use(PrimeVue, {
