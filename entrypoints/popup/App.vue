@@ -3,7 +3,6 @@ import { ref, onMounted, watch } from 'vue';
 import Button from 'primevue/button';
 import Slider from 'primevue/slider';
 import InputText from 'primevue/inputtext';
-import Chip from 'primevue/chip';
 import Message from 'primevue/message';
 
 const isDark = ref(localStorage.getItem('theme') !== 'light');
@@ -41,10 +40,10 @@ async function loadGroupColors() {
   groupColorMap.value = map;
 }
 
-function chipStyle(name: string) {
+function groupDotStyle(name: string) {
   const chromeName = groupColorMap.value[name];
   const color = chromeName ? GROUP_COLORS[chromeName] : undefined;
-  return color ? { borderLeft: `3px solid ${color}`, paddingLeft: '10px' } : {};
+  return color ? { background: color } : {};
 }
 
 const dragSrcIndex = ref<number | null>(null);
@@ -170,17 +169,17 @@ function showStatus(message: string, type: 'success' | 'error') {
         <div class="input-row">
           <InputText
             v-model="groupNameInput"
-            placeholder="Group name…"
+            placeholder="Add group…"
             @keydown.enter="addGroup"
             fluid
           />
-          <Button label="+" @click="addGroup" outlined />
+          <Button icon="pi pi-plus" @click="addGroup" outlined />
         </div>
-        <div class="chips-list" v-if="pinnedGroups.length">
+        <div class="groups-list" v-if="pinnedGroups.length">
           <div
             v-for="(name, index) in pinnedGroups"
             :key="name"
-            class="chip-wrapper"
+            class="group-row"
             :class="{ 'drag-over': dragOverIndex === index }"
             draggable="true"
             @dragstart="onDragStart(index)"
@@ -188,7 +187,10 @@ function showStatus(message: string, type: 'success' | 'error') {
             @drop="onDrop"
             @dragend="onDragEnd"
           >
-            <Chip :label="name" removable @remove="removeGroup(name)" :pt="{ root: { style: chipStyle(name) } }" />
+            <i class="pi pi-bars drag-handle"></i>
+            <span class="group-dot" :style="groupDotStyle(name)"></span>
+            <span class="group-name">{{ name }}</span>
+            <Button icon="pi pi-times" text rounded size="small" @click="removeGroup(name)" />
           </div>
         </div>
       </div>
@@ -246,28 +248,61 @@ function showStatus(message: string, type: 'success' | 'error') {
   gap: 8px;
 }
 
-.chips-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.chip-wrapper {
-  cursor: grab;
-}
-
-.chip-wrapper:active {
-  cursor: grabbing;
-}
-
 :deep(.p-slider-handle) {
   background: var(--p-primary-color) !important;
   border-color: var(--p-primary-color) !important;
 }
 
-.chip-wrapper.drag-over {
+.groups-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--p-surface-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.group-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 10px;
+  cursor: grab;
+  transition: background 0.15s;
+}
+
+.group-row:not(:last-child) {
+  border-bottom: 1px solid var(--p-surface-border);
+}
+
+.group-row:hover {
+  background: var(--p-surface-hover);
+}
+
+.group-row:active {
+  cursor: grabbing;
+}
+
+.group-row.drag-over {
   outline: 2px dashed var(--p-primary-color);
-  border-radius: 16px;
+  outline-offset: -2px;
+}
+
+.drag-handle {
+  opacity: 0.3;
+  font-size: 12px;
+}
+
+.group-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--p-surface-400);
+}
+
+.group-name {
+  flex: 1;
+  font-size: 13px;
 }
 
 .action-row {
