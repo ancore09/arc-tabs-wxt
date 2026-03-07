@@ -202,6 +202,8 @@ function showStatus(message: string, type: 'success' | 'error') {
             <i class="pi pi-bars drag-handle"></i>
             <span class="group-dot" :style="groupDotStyle(name)"></span>
             <span class="group-name">{{ name }}</span>
+            <Button icon="pi pi-angle-double-up" text rounded size="small" v-tooltip.top="'Move to top'" @click="moveToTop(index)" :disabled="index === 0" />         
+            <Button icon="pi pi-angle-double-down" text rounded size="small" v-tooltip.top="'Move to bottom'" @click="moveToBottom(index)" :disabled="index === pinnedGroups.length - 1" />    
             <Button icon="pi pi-times" text rounded size="small" @click="removeGroup(name)" />
           </div>
         </div>
