@@ -104,6 +104,22 @@ export default defineBackground(() => {
     }, 100);
   });
 
+  browser.webNavigation.onCommitted.addListener(async (details) => {
+    if (details.frameId !== 0) return;
+    if (details.transitionType !== 'auto_bookmark') return;
+    if (isRestoringSession) return;
+
+    const { url, tabId } = details;
+
+    try {
+      await browser.tabs.goBack(tabId);
+    } catch {
+      await browser.tabs.update(tabId, { url: 'chrome://newtab' });
+    }
+
+    await browser.tabs.create({ url, active: true });
+  });
+
   async function movePinnedGroupsToStart() {
     try {
       const { pinnedGroups: pinnedTitles } = settings;
