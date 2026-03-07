@@ -112,6 +112,18 @@ function removeGroup(name: string) {
   pinnedGroups.value = pinnedGroups.value.filter(g => g !== name);
 }
 
+function moveToTop(index: number) {
+  const items = [...pinnedGroups.value];
+  items.unshift(items.splice(index, 1)[0]);
+  pinnedGroups.value = items;
+}
+
+function moveToBottom(index: number) {
+  const items = [...pinnedGroups.value];
+  items.push(items.splice(index, 1)[0]);
+  pinnedGroups.value = items;
+}
+
 
 function createArcGroup() {
   browser.runtime.sendMessage({ action: 'createArcGroup' }, (response) => {
@@ -258,7 +270,8 @@ function showStatus(message: string, type: 'success' | 'error') {
   flex-direction: column;
   border: 1px solid var(--p-surface-border);
   border-radius: 8px;
-  overflow: hidden;
+  overflow-y: auto;
+  max-height: 180px;
 }
 
 .group-row {
