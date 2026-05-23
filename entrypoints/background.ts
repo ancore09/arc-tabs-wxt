@@ -117,12 +117,14 @@ export default defineBackground(() => {
     }
 
     if (request.action === 'updateSettings') {
+      const delayChanged = request.startupDelay !== settings.startupDelay;
       settings.startupDelay = request.startupDelay;
       if (request.enableOnStartup !== undefined) {
         settings.enableOnStartup = request.enableOnStartup as boolean;
       }
-      // If the delay is still running, restart the timeout with the new duration
-      if (isRestoringSession) {
+      // Only restart the timer if the user actually changed the delay duration —
+      // not on every popup open (which also sends updateSettings via Vue watchers).
+      if (isRestoringSession && delayChanged) {
         startRestorationTimeout();
       }
       sendResponse({ success: true });

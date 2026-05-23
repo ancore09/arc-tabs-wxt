@@ -20,6 +20,36 @@ const groupNameInput = ref('');
 const status = ref({ message: '', type: '' as 'success' | 'error' | '', visible: false });
 const loaded = ref(false);
 
+// --- Housekeeping ---
+// Estimated memory: 50% of tabs use ~70 MB, 30% use ~150 MB, 20% use ~300 MB → ~140 MB/tab average
+const MB_PER_TAB = 0.5 * 70 + 0.3 * 150 + 0.2 * 300; // 140 MB
+const MEM_REF_GB = 8; // bar fills at 8 GB (reference scale)
+
+const openTabCount   = ref(0);
+const tabsToClose    = ref(5);
+const estimatedMemGB = computed(() =>
+  parseFloat(((openTabCount.value * MB_PER_TAB) / 1024).toFixed(1))
+);
+const memPercent = computed(() =>
+  Math.min(100, Math.round((estimatedMemGB.value / MEM_REF_GB) * 100))
+);
+
+function refreshStats() {
+  browser.tabs.query({}).then(tabs => { openTabCount.value = tabs.length; });
+}
+
+async function closeOldestTabs() {
+  // Higher tab index = older (new tabs are always inserted right after pinned groups)
+  const tabs = await browser.tabs.query({ pinned: false });
+  const toClose = [...tabs]
+    .sort((a, b) => b.index - a.index)
+    .slice(0, tabsToClose.value);
+  if (!toClose.length) return;
+  await browser.tabs.remove(toClose.map(t => t.id!));
+  refreshStats();
+  showStatus(`Closed ${toClose.length} tab${toClose.length !== 1 ? 's' : ''}`, 'success');
+}
+
 // --- Active state ---
 const isActive = ref(true);
 const isRestoringSession = ref(false);
@@ -132,6 +162,7 @@ onMounted(() => {
   });
 
   loadGroupColors();
+  refreshStats();
 });
 
 onUnmounted(() => {
@@ -290,6 +321,37 @@ function showStatus(message: string, type: 'success' | 'error') {
             <Button icon="pi pi-angle-double-down" text rounded size="small" v-tooltip.top="'Move to bottom'" @click="moveToBottom(index)" :disabled="index === pinnedGroups.length - 1" />
             <Button icon="pi pi-times" text rounded size="small" @click="removeGroup(name)" />
           </div>
+        </div>
+      </div>
+
+      <!-- Housekeeping -->
+      <div class="setting-group">
+        <div class="section-header">
+          <label>Housekeeping</label>
+          <Button icon="pi pi-refresh" text rounded size="small" @click="refreshStats" />
+        </div>
+
+        <div class="mem-stats">
+          <span>~<strong>{{ estimatedMemGB }} GB</strong> estimated</span>
+          <span class="tab-count-badge">{{ openTabCount }} tabs</span>
+        </div>
+
+        <div class="mem-bar-track">
+          <div
+            class="mem-bar-fill"
+            :class="{ 'mem-high': memPercent >= 80 }"
+            :style="{ width: memPercent + '%' }"
+          />
+        </div>
+
+        <div class="close-controls">
+          <span class="close-label">Close oldest</span>
+          <div class="counter">
+            <Button icon="pi pi-minus" text rounded size="small" :disabled="tabsToClose <= 1" @click="tabsToClose--" />
+            <span class="counter-value">{{ tabsToClose }}</span>
+            <Button icon="pi pi-plus"  text rounded size="small" :disabled="tabsToClose >= 50" @click="tabsToClose++" />
+          </div>
+          <Button label="Close tabs" severity="danger" outlined size="small" @click="closeOldestTabs" />
         </div>
       </div>
 
@@ -452,5 +514,67 @@ function showStatus(message: string, type: 'success' | 'error') {
   text-align: center;
   font-size: 11px;
   opacity: 0.4;
+}
+
+/* Housekeeping */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mem-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.tab-count-badge {
+  opacity: 0.5;
+  font-size: 11px;
+}
+
+.mem-bar-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--p-surface-border);
+  overflow: hidden;
+}
+
+.mem-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--p-primary-color);
+  transition: width 0.4s ease;
+}
+
+.mem-bar-fill.mem-high {
+  background: var(--p-red-500, #ef4444);
+}
+
+.close-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.close-label {
+  font-size: 12px;
+  opacity: 0.7;
+  flex: 1;
+}
+
+.counter {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.counter-value {
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 24px;
+  text-align: center;
 }
 </style>
