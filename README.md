@@ -1,5 +1,7 @@
 # arc-tabs
 
+[English version](./README.en.md)
+
 Расширение имитирует поведение Arc Browser в отношении открытия новых вкладок в Google Chrome.
 
 ### Аналогия с Arc
