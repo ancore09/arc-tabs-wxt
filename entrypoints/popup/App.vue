@@ -1,9 +1,10 @@
 <script lang="ts" setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import Button from 'primevue/button';
 import Slider from 'primevue/slider';
 import InputText from 'primevue/inputtext';
 import Message from 'primevue/message';
+import ToggleSwitch from 'primevue/toggleswitch';
 
 const isDark = ref(localStorage.getItem('theme') !== 'light');
 
@@ -18,6 +19,47 @@ const pinnedGroups = ref<string[]>(['arc-tabs']);
 const groupNameInput = ref('');
 const status = ref({ message: '', type: '' as 'success' | 'error' | '', visible: false });
 const loaded = ref(false);
+
+// --- Active state ---
+const isActive = ref(true);
+const isRestoringSession = ref(false);
+const activatesInSeconds = ref(0);
+let countdownInterval: ReturnType<typeof setInterval> | null = null;
+
+function startCountdown(ms: number) {
+  activatesInSeconds.value = Math.ceil(ms / 1000);
+  if (countdownInterval) clearInterval(countdownInterval);
+  countdownInterval = setInterval(() => {
+    activatesInSeconds.value = Math.max(0, activatesInSeconds.value - 1);
+    if (activatesInSeconds.value === 0) {
+      clearInterval(countdownInterval!);
+      countdownInterval = null;
+      isRestoringSession.value = false;
+    }
+  }, 1000);
+}
+
+function stopCountdown() {
+  if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+  isRestoringSession.value = false;
+  activatesInSeconds.value = 0;
+}
+
+const activeDescription = computed(() => {
+  if (!isActive.value) return 'Tab management is off';
+  if (isRestoringSession.value && activatesInSeconds.value > 0) return `Starting in ${activatesInSeconds.value}s…`;
+  return 'Tab management is on';
+});
+
+function toggleActive() {
+  isActive.value = !isActive.value;
+  // Toggling always cancels the startup delay (background will also clear it)
+  stopCountdown();
+  browser.runtime.sendMessage({ action: 'setActive', isActive: isActive.value });
+}
+
+// --- Enable on startup ---
+const enableOnStartup = ref(true);
 
 const GROUP_COLORS: Record<string, string> = {
   grey:   '#9aa0a6',
@@ -49,13 +91,8 @@ function groupDotStyle(name: string) {
 const dragSrcIndex = ref<number | null>(null);
 const dragOverIndex = ref<number | null>(null);
 
-function onDragStart(index: number) {
-  dragSrcIndex.value = index;
-}
-
-function onDragOver(index: number) {
-  dragOverIndex.value = index;
-}
+function onDragStart(index: number) { dragSrcIndex.value = index; }
+function onDragOver(index: number) { dragOverIndex.value = index; }
 
 function onDrop() {
   if (dragSrcIndex.value !== null && dragOverIndex.value !== null && dragSrcIndex.value !== dragOverIndex.value) {
@@ -74,12 +111,31 @@ function onDragEnd() {
 }
 
 onMounted(() => {
-  browser.storage.sync.get({ startupDelay: 15000, pinnedGroups: ['arc-tabs'] }, (s) => {
-    startupDelay.value = s.startupDelay as number;
-    pinnedGroups.value = s.pinnedGroups ? Object.values(s.pinnedGroups) as string[] : ['arc-tabs'];
-    loaded.value = true;
+  browser.storage.sync.get(
+    { startupDelay: 15000, pinnedGroups: ['arc-tabs'], enableOnStartup: true },
+    (s) => {
+      startupDelay.value = s.startupDelay as number;
+      pinnedGroups.value = s.pinnedGroups ? Object.values(s.pinnedGroups) as string[] : ['arc-tabs'];
+      enableOnStartup.value = (s.enableOnStartup as boolean) ?? true;
+      loaded.value = true;
+    },
+  );
+
+  // Sync active state + restoration countdown from background
+  browser.runtime.sendMessage({ action: 'getStatus' }, (response) => {
+    if (!response) return;
+    isActive.value = response.isActive as boolean;
+    isRestoringSession.value = response.isRestoringSession as boolean;
+    if (response.isRestoringSession && response.activatesIn > 0) {
+      startCountdown(response.activatesIn as number);
+    }
   });
+
   loadGroupColors();
+});
+
+onUnmounted(() => {
+  if (countdownInterval) clearInterval(countdownInterval);
 });
 
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -87,14 +143,22 @@ function persistSettings() {
   if (!loaded.value) return;
   if (saveTimeout) clearTimeout(saveTimeout);
   saveTimeout = setTimeout(() => {
-    browser.storage.sync.set({ startupDelay: startupDelay.value, pinnedGroups: pinnedGroups.value }, () => {
-      browser.runtime.sendMessage({ action: 'updateSettings', startupDelay: startupDelay.value });
-    });
+    browser.storage.sync.set(
+      { startupDelay: startupDelay.value, pinnedGroups: pinnedGroups.value, enableOnStartup: enableOnStartup.value },
+      () => {
+        browser.runtime.sendMessage({
+          action: 'updateSettings',
+          startupDelay: startupDelay.value,
+          enableOnStartup: enableOnStartup.value,
+        });
+      },
+    );
   }, 300);
 }
 
 watch(startupDelay, persistSettings);
 watch(pinnedGroups, persistSettings, { deep: true });
+watch(enableOnStartup, persistSettings);
 
 function delaySeconds() {
   return Math.round(startupDelay.value / 1000);
@@ -123,7 +187,6 @@ function moveToBottom(index: number) {
   items.push(items.splice(index, 1)[0]);
   pinnedGroups.value = items;
 }
-
 
 function createArcGroup() {
   browser.runtime.sendMessage({ action: 'createArcGroup' }, (response) => {
@@ -161,6 +224,27 @@ function showStatus(message: string, type: 'success' | 'error') {
     </div>
 
     <div class="content">
+      <!-- Active toggles -->
+      <div class="setting-group">
+        <div class="toggle-row" @click="toggleActive">
+          <div class="toggle-label">
+            <span>Active</span>
+            <small :class="{ 'status-starting': isRestoringSession && isActive }">
+              {{ activeDescription }}
+            </small>
+          </div>
+          <ToggleSwitch :modelValue="isActive" @update:modelValue="toggleActive" @click.stop />
+        </div>
+
+        <div class="toggle-row" @click="enableOnStartup = !enableOnStartup">
+          <div class="toggle-label">
+            <span>Enable on startup</span>
+            <small>Auto-activate when Chrome launches</small>
+          </div>
+          <ToggleSwitch v-model="enableOnStartup" @click.stop />
+        </div>
+      </div>
+
       <!-- Startup delay -->
       <div class="setting-group">
         <label
@@ -202,8 +286,8 @@ function showStatus(message: string, type: 'success' | 'error') {
             <i class="pi pi-bars drag-handle"></i>
             <span class="group-dot" :style="groupDotStyle(name)"></span>
             <span class="group-name">{{ name }}</span>
-            <Button icon="pi pi-angle-double-up" text rounded size="small" v-tooltip.top="'Move to top'" @click="moveToTop(index)" :disabled="index === 0" />         
-            <Button icon="pi pi-angle-double-down" text rounded size="small" v-tooltip.top="'Move to bottom'" @click="moveToBottom(index)" :disabled="index === pinnedGroups.length - 1" />    
+            <Button icon="pi pi-angle-double-up" text rounded size="small" v-tooltip.top="'Move to top'" @click="moveToTop(index)" :disabled="index === 0" />
+            <Button icon="pi pi-angle-double-down" text rounded size="small" v-tooltip.top="'Move to bottom'" @click="moveToBottom(index)" :disabled="index === pinnedGroups.length - 1" />
             <Button icon="pi pi-times" text rounded size="small" @click="removeGroup(name)" />
           </div>
         </div>
@@ -255,6 +339,44 @@ function showStatus(message: string, type: 'success' | 'error') {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--p-surface-border);
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.toggle-row:hover {
+  background: var(--p-surface-hover);
+}
+
+.toggle-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toggle-label span {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.toggle-label small {
+  font-size: 11px;
+  opacity: 0.5;
+  transition: color 0.2s, opacity 0.2s;
+}
+
+.toggle-label small.status-starting {
+  opacity: 0.8;
+  color: var(--p-primary-color);
 }
 
 .input-row {

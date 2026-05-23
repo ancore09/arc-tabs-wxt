@@ -1,10 +1,51 @@
 export default defineBackground(() => {
   let isRestoringSession = false;
+  let restorationStartTime: number | null = null;
   let initializationTimeout: ReturnType<typeof setTimeout> | null = null;
+  let isActive = true;
   let settings = {
     startupDelay: 15000,
     pinnedGroups: ['arc-tabs'] as string[],
+    enableOnStartup: true,
   };
+
+  function clearRestorationTimeout() {
+    if (initializationTimeout) clearTimeout(initializationTimeout);
+    initializationTimeout = null;
+    isRestoringSession = false;
+    restorationStartTime = null;
+  }
+
+  function startRestorationTimeout() {
+    clearRestorationTimeout();
+    isRestoringSession = true;
+    restorationStartTime = Date.now();
+    initializationTimeout = setTimeout(() => {
+      isRestoringSession = false;
+      restorationStartTime = null;
+    }, settings.startupDelay);
+  }
+
+  // Persist isActive to session storage so it survives service worker restarts
+  // within the same browser session (storage.session is cleared when the browser closes).
+  async function saveActiveState() {
+    await browser.storage.session?.set({ isActive });
+  }
+
+  // On service worker start: read isActive from session storage if present.
+  // If absent (fresh browser launch), fall back to enableOnStartup.
+  async function initActiveState() {
+    const data = await browser.storage.session?.get({ isActive: null });
+    if (data && data.isActive !== null) {
+      isActive = data.isActive as boolean;
+    } else {
+      const syncData = await browser.storage.sync.get({ enableOnStartup: true });
+      isActive = (syncData.enableOnStartup as boolean) ?? true;
+      saveActiveState();
+    }
+  }
+
+  initActiveState();
 
   async function initializeArcTabsGroup() {
     try {
@@ -40,10 +81,11 @@ export default defineBackground(() => {
     }
   });
 
-  browser.storage.sync.get({ startupDelay: 15000, pinnedGroups: ['arc-tabs'] }, (loadedSettings) => {
+  browser.storage.sync.get({ startupDelay: 15000, pinnedGroups: ['arc-tabs'], enableOnStartup: true }, (loadedSettings) => {
     settings = {
       startupDelay: (loadedSettings.startupDelay as number) || 15000,
       pinnedGroups: loadedSettings.pinnedGroups ? Object.values(loadedSettings.pinnedGroups) : ['arc-tabs'],
+      enableOnStartup: (loadedSettings.enableOnStartup as boolean) ?? true,
     };
   });
 
@@ -51,16 +93,37 @@ export default defineBackground(() => {
     if (area !== 'sync') return;
     if (changes.startupDelay) settings.startupDelay = changes.startupDelay.newValue as number;
     if (changes.pinnedGroups) settings.pinnedGroups = Object.keys(changes.pinnedGroups.newValue as object).length !== 0 ? Object.values(changes.pinnedGroups.newValue as object) : ['arc-tabs'];
+    if (changes.enableOnStartup) settings.enableOnStartup = changes.enableOnStartup.newValue as boolean;
   });
 
   browser.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+    if (request.action === 'getStatus') {
+      let activatesIn: number | null = null;
+      if (isRestoringSession && restorationStartTime !== null) {
+        const elapsed = Date.now() - restorationStartTime;
+        activatesIn = Math.max(0, settings.startupDelay - elapsed);
+      }
+      sendResponse({ isActive, isRestoringSession, activatesIn });
+      return;
+    }
+
+    if (request.action === 'setActive') {
+      isActive = request.isActive as boolean;
+      // Clicking the toggle always skips any pending startup delay
+      clearRestorationTimeout();
+      saveActiveState();
+      sendResponse({ success: true });
+      return;
+    }
+
     if (request.action === 'updateSettings') {
       settings.startupDelay = request.startupDelay;
-      if (isRestoringSession && initializationTimeout) {
-        clearTimeout(initializationTimeout);
-        initializationTimeout = setTimeout(() => {
-          isRestoringSession = false;
-        }, settings.startupDelay);
+      if (request.enableOnStartup !== undefined) {
+        settings.enableOnStartup = request.enableOnStartup as boolean;
+      }
+      // If the delay is still running, restart the timeout with the new duration
+      if (isRestoringSession) {
+        startRestorationTimeout();
       }
       sendResponse({ success: true });
     }
@@ -79,15 +142,15 @@ export default defineBackground(() => {
   });
 
   browser.runtime.onStartup.addListener(() => {
-    isRestoringSession = true;
-    if (initializationTimeout) clearTimeout(initializationTimeout);
-    initializationTimeout = setTimeout(() => {
-      console.log('working')
-      isRestoringSession = false;
-    }, settings.startupDelay);
+    // On browser launch reset isActive from the stored preference,
+    // then hold in restoration mode until the startup delay expires.
+    isActive = settings.enableOnStartup;
+    saveActiveState();
+    if (isActive) startRestorationTimeout();
   });
 
   browser.tabs.onCreated.addListener(async (tab) => {
+    if (!isActive) return;
     if (isRestoringSession) return;
 
     console.log(tab);
@@ -133,7 +196,7 @@ export default defineBackground(() => {
     }
   }
 
-  async function findPositionAfterGroups(newTab: Browser.tabs.Tab, openerTab?: Browser.tabs.Tab): Promise<number> {
+  async function findPositionAfterGroups(newTab: Browser.tabs.Tab, _openerTab?: Browser.tabs.Tab): Promise<number> {
     const { pinnedGroups: pinnedTitles } = settings;
     if (!pinnedTitles?.length) return 0;
 
