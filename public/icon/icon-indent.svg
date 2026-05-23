@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Indent — pinned tabs are inset (indented) under a group label bar,
+       free tab is flush left at full width -->
+
+  <rect width="128" height="128" rx="26" fill="#18181b"/>
+
+  <!-- Group label bar at top -->
+  <rect x="16" y="16" width="96" height="10" rx="5" fill="#7c3aed"/>
+
+  <!-- Indented pinned tabs (shifted right) -->
+  <rect x="30" y="34" width="82" height="20" rx="6" fill="#7c3aed" opacity="0.8"/>
+  <rect x="30" y="60" width="82" height="20" rx="6" fill="#7c3aed" opacity="0.45"/>
+
+  <!-- Indent line connecting label to tabs -->
+  <line x1="22" y1="26" x2="22" y2="78" stroke="#6d28d9" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Free tab — full width, no indent, grayed -->
+  <rect x="16" y="90" width="96" height="22" rx="6" fill="#3f3f46"/>
+</svg>

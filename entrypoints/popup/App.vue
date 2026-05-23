@@ -5,6 +5,12 @@ import Slider from 'primevue/slider';
 import InputText from 'primevue/inputtext';
 import Message from 'primevue/message';
 import ToggleSwitch from 'primevue/toggleswitch';
+import InputNumber from 'primevue/inputnumber';
+import Tabs from 'primevue/tabs';
+import TabList from 'primevue/tablist';
+import Tab from 'primevue/tab';
+import TabPanels from 'primevue/tabpanels';
+import TabPanel from 'primevue/tabpanel';
 
 const isDark = ref(localStorage.getItem('theme') !== 'light');
 
@@ -21,17 +27,29 @@ const status = ref({ message: '', type: '' as 'success' | 'error' | '', visible:
 const loaded = ref(false);
 
 // --- Housekeeping ---
-// Estimated memory: 50% of tabs use ~70 MB, 30% use ~150 MB, 20% use ~300 MB → ~140 MB/tab average
-const MB_PER_TAB = 0.5 * 70 + 0.3 * 150 + 0.2 * 300; // 140 MB
-const MEM_REF_GB = 8; // bar fills at 8 GB (reference scale)
+// Tier weights are fixed (50 / 30 / 20 %), MB values are user-configurable.
+const ls = (key: string, def: number) => parseFloat(localStorage.getItem(key) ?? String(def));
+const tierLowMb  = ref(ls('mem_tier_low',  70));   // 50 % of tabs
+const tierMedMb  = ref(ls('mem_tier_med',  150));  // 30 % of tabs
+const tierHighMb = ref(ls('mem_tier_high', 300));  // 20 % of tabs
+const memRefGb   = ref(ls('mem_ref_gb',    8));    // bar fills at this value
+
+watch(tierLowMb,  v => localStorage.setItem('mem_tier_low',  String(v)));
+watch(tierMedMb,  v => localStorage.setItem('mem_tier_med',  String(v)));
+watch(tierHighMb, v => localStorage.setItem('mem_tier_high', String(v)));
+watch(memRefGb,   v => localStorage.setItem('mem_ref_gb',    String(v)));
+
+const mbPerTab = computed(() =>
+  0.5 * tierLowMb.value + 0.3 * tierMedMb.value + 0.2 * tierHighMb.value
+);
 
 const openTabCount   = ref(0);
 const tabsToClose    = ref(5);
 const estimatedMemGB = computed(() =>
-  parseFloat(((openTabCount.value * MB_PER_TAB) / 1024).toFixed(1))
+  parseFloat(((openTabCount.value * mbPerTab.value) / 1024).toFixed(1))
 );
 const memPercent = computed(() =>
-  Math.min(100, Math.round((estimatedMemGB.value / MEM_REF_GB) * 100))
+  Math.min(100, Math.round((estimatedMemGB.value / memRefGb.value) * 100))
 );
 
 function refreshStats() {
@@ -39,7 +57,6 @@ function refreshStats() {
 }
 
 async function closeOldestTabs() {
-  // Higher tab index = older (new tabs are always inserted right after pinned groups)
   const tabs = await browser.tabs.query({ pinned: false });
   const toClose = [...tabs]
     .sort((a, b) => b.index - a.index)
@@ -83,7 +100,6 @@ const activeDescription = computed(() => {
 
 function toggleActive() {
   isActive.value = !isActive.value;
-  // Toggling always cancels the startup delay (background will also clear it)
   stopCountdown();
   browser.runtime.sendMessage({ action: 'setActive', isActive: isActive.value });
 }
@@ -151,7 +167,6 @@ onMounted(() => {
     },
   );
 
-  // Sync active state + restoration countdown from background
   browser.runtime.sendMessage({ action: 'getStatus' }, (response) => {
     if (!response) return;
     isActive.value = response.isActive as boolean;
@@ -254,147 +269,179 @@ function showStatus(message: string, type: 'success' | 'error') {
       />
     </div>
 
-    <div class="content">
-      <!-- Active toggles -->
-      <div class="setting-group">
-        <div class="toggle-row" @click="toggleActive">
-          <div class="toggle-label">
-            <span>Active</span>
-            <small :class="{ 'status-starting': isRestoringSession && isActive }">
-              {{ activeDescription }}
-            </small>
+    <Tabs value="0">
+      <TabList>
+        <Tab value="0">Groups</Tab>
+        <Tab value="1">Settings</Tab>
+      </TabList>
+
+      <TabPanels>
+
+        <!-- Tab 1: Groups -->
+        <TabPanel value="0">
+          <div class="tab-content">
+
+            <!-- Active toggle -->
+            <div class="toggle-row" @click="toggleActive">
+              <div class="toggle-label">
+                <span>Active</span>
+                <small :class="{ 'status-starting': isRestoringSession && isActive }">
+                  {{ activeDescription }}
+                </small>
+              </div>
+              <ToggleSwitch :modelValue="isActive" @update:modelValue="toggleActive" @click.stop />
+            </div>
+
+            <!-- Pinned groups -->
+            <div class="setting-group">
+              <label v-tooltip.bottom="'New tabs open after the last tab in these groups.'">
+                Pinned groups
+              </label>
+              <div class="input-row">
+                <InputText
+                  v-model="groupNameInput"
+                  placeholder="Add group…"
+                  @keydown.enter="addGroup"
+                  fluid
+                />
+                <Button icon="pi pi-plus" @click="addGroup" outlined />
+              </div>
+              <div class="groups-list" v-if="pinnedGroups.length">
+                <div
+                  v-for="(name, index) in pinnedGroups"
+                  :key="name"
+                  class="group-row"
+                  :class="{ 'drag-over': dragOverIndex === index }"
+                  draggable="true"
+                  @dragstart="onDragStart(index)"
+                  @dragover.prevent="onDragOver(index)"
+                  @drop="onDrop"
+                  @dragend="onDragEnd"
+                >
+                  <i class="pi pi-bars drag-handle"></i>
+                  <span class="group-dot" :style="groupDotStyle(name)"></span>
+                  <span class="group-name">{{ name }}</span>
+                  <Button icon="pi pi-angle-double-up" text rounded size="small" v-tooltip.top="'Move to top'" @click="moveToTop(index)" :disabled="index === 0" />
+                  <Button icon="pi pi-angle-double-down" text rounded size="small" v-tooltip.top="'Move to bottom'" @click="moveToBottom(index)" :disabled="index === pinnedGroups.length - 1" />
+                  <Button icon="pi pi-times" text rounded size="small" @click="removeGroup(name)" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Arrange groups -->
+            <Button label="Arrange groups" severity="secondary" @click="movePinnedGroups" fluid />
+
+            <!-- Housekeeping -->
+            <div class="setting-group">
+              <div class="section-header">
+                <label>Housekeeping</label>
+                <Button icon="pi pi-refresh" text rounded size="small" @click="refreshStats" />
+              </div>
+              <div class="mem-stats">
+                <span>~<strong>{{ estimatedMemGB }} GB</strong> estimated</span>
+                <span class="tab-count-badge">{{ openTabCount }} tabs</span>
+              </div>
+              <div class="mem-bar-track">
+                <div
+                  class="mem-bar-fill"
+                  :class="{ 'mem-high': memPercent >= 80 }"
+                  :style="{ width: memPercent + '%' }"
+                />
+              </div>
+              <div class="close-controls">
+                <span class="close-label">Close oldest</span>
+                <div class="counter">
+                  <Button icon="pi pi-minus" text rounded size="small" :disabled="tabsToClose <= 1" @click="tabsToClose--" />
+                  <span class="counter-value">{{ tabsToClose }}</span>
+                  <Button icon="pi pi-plus" text rounded size="small" :disabled="tabsToClose >= 50" @click="tabsToClose++" />
+                </div>
+                <Button label="Close tabs" severity="danger" outlined size="small" @click="closeOldestTabs" />
+              </div>
+            </div>
+
           </div>
-          <ToggleSwitch :modelValue="isActive" @update:modelValue="toggleActive" @click.stop />
-        </div>
+        </TabPanel>
 
-        <div class="toggle-row" @click="enableOnStartup = !enableOnStartup">
-          <div class="toggle-label">
-            <span>Enable on startup</span>
-            <small>Auto-activate when Chrome launches</small>
+        <!-- Tab 2: Settings -->
+        <TabPanel value="1">
+          <div class="tab-content">
+
+            <!-- Enable on startup -->
+            <div class="toggle-row" @click="enableOnStartup = !enableOnStartup">
+              <div class="toggle-label">
+                <span>Enable on startup</span>
+                <small>Auto-activate when Chrome launches</small>
+              </div>
+              <ToggleSwitch v-model="enableOnStartup" @click.stop />
+            </div>
+
+            <!-- Startup delay -->
+            <div class="setting-group">
+              <label v-tooltip.bottom="'How long the extension waits after browser launch before managing tabs. Prevents interference with session restore.'">
+                Startup delay — <strong>{{ delaySeconds() }}s</strong>
+              </label>
+              <Slider v-model="startupDelay" :min="10000" :max="60000" :step="1000" fluid />
+            </div>
+
+            <!-- Memory estimation config -->
+            <div class="setting-group section-gap">
+              <label>Memory estimation</label>
+              <div class="formula-grid">
+                <span class="formula-tier">Light <small>(50%)</small></span>
+                <InputNumber v-model="tierLowMb"  :min="1" :max="9999" suffix=" MB" :inputStyle="{ width: '72px' }" size="small" :allowEmpty="false" />
+                <span class="formula-tier">Medium <small>(30%)</small></span>
+                <InputNumber v-model="tierMedMb"  :min="1" :max="9999" suffix=" MB" :inputStyle="{ width: '72px' }" size="small" :allowEmpty="false" />
+                <span class="formula-tier">Heavy <small>(20%)</small></span>
+                <InputNumber v-model="tierHighMb" :min="1" :max="9999" suffix=" MB" :inputStyle="{ width: '72px' }" size="small" :allowEmpty="false" />
+                <span class="formula-tier">Bar max</span>
+                <InputNumber v-model="memRefGb"   :min="1" :max="128"  suffix=" GB" :inputStyle="{ width: '72px' }" size="small" :allowEmpty="false" />
+              </div>
+              <small class="formula-avg">~{{ mbPerTab.toFixed(0) }} MB avg per tab</small>
+            </div>
+
+            <!-- Create arc-tabs group -->
+            <Button
+              label="Create arc-tabs group"
+              severity="secondary"
+              @click="createArcGroup"
+              fluid
+              v-tooltip.top="'Creates an arc-tabs tab group with one empty tab for scroll control. If deleted, recreated automatically.'"
+            />
+
           </div>
-          <ToggleSwitch v-model="enableOnStartup" @click.stop />
-        </div>
-      </div>
+        </TabPanel>
 
-      <!-- Startup delay -->
-      <div class="setting-group">
-        <label
-          v-tooltip.bottom="'How long the extension is disabled after browser launch. Prevents moving tabs while the browser restores the previous session.'"
-        >
-          Startup delay — <strong>{{ delaySeconds() }}s</strong>
-        </label>
-        <Slider v-model="startupDelay" :min="10000" :max="60000" :step="1000" fluid />
-      </div>
+      </TabPanels>
+    </Tabs>
 
-      <!-- Pinned groups -->
-      <div class="setting-group">
-        <label
-          v-tooltip.bottom="'New tabs open after the last tab in these groups. Groups not in this list are ignored.'"
-        >
-          Pinned groups
-        </label>
-        <div class="input-row">
-          <InputText
-            v-model="groupNameInput"
-            placeholder="Add group…"
-            @keydown.enter="addGroup"
-            fluid
-          />
-          <Button icon="pi pi-plus" @click="addGroup" outlined />
-        </div>
-        <div class="groups-list" v-if="pinnedGroups.length">
-          <div
-            v-for="(name, index) in pinnedGroups"
-            :key="name"
-            class="group-row"
-            :class="{ 'drag-over': dragOverIndex === index }"
-            draggable="true"
-            @dragstart="onDragStart(index)"
-            @dragover.prevent="onDragOver(index)"
-            @drop="onDrop"
-            @dragend="onDragEnd"
-          >
-            <i class="pi pi-bars drag-handle"></i>
-            <span class="group-dot" :style="groupDotStyle(name)"></span>
-            <span class="group-name">{{ name }}</span>
-            <Button icon="pi pi-angle-double-up" text rounded size="small" v-tooltip.top="'Move to top'" @click="moveToTop(index)" :disabled="index === 0" />
-            <Button icon="pi pi-angle-double-down" text rounded size="small" v-tooltip.top="'Move to bottom'" @click="moveToBottom(index)" :disabled="index === pinnedGroups.length - 1" />
-            <Button icon="pi pi-times" text rounded size="small" @click="removeGroup(name)" />
-          </div>
-        </div>
-      </div>
+    <Message v-if="status.visible" :severity="status.type === 'success' ? 'success' : 'error'" :closable="false" class="status-msg">
+      {{ status.message }}
+    </Message>
 
-      <!-- Housekeeping -->
-      <div class="setting-group">
-        <div class="section-header">
-          <label>Housekeeping</label>
-          <Button icon="pi pi-refresh" text rounded size="small" @click="refreshStats" />
-        </div>
-
-        <div class="mem-stats">
-          <span>~<strong>{{ estimatedMemGB }} GB</strong> estimated</span>
-          <span class="tab-count-badge">{{ openTabCount }} tabs</span>
-        </div>
-
-        <div class="mem-bar-track">
-          <div
-            class="mem-bar-fill"
-            :class="{ 'mem-high': memPercent >= 80 }"
-            :style="{ width: memPercent + '%' }"
-          />
-        </div>
-
-        <div class="close-controls">
-          <span class="close-label">Close oldest</span>
-          <div class="counter">
-            <Button icon="pi pi-minus" text rounded size="small" :disabled="tabsToClose <= 1" @click="tabsToClose--" />
-            <span class="counter-value">{{ tabsToClose }}</span>
-            <Button icon="pi pi-plus"  text rounded size="small" :disabled="tabsToClose >= 50" @click="tabsToClose++" />
-          </div>
-          <Button label="Close tabs" severity="danger" outlined size="small" @click="closeOldestTabs" />
-        </div>
-      </div>
-
-      <div class="action-row">
-        <Button label="Arrange groups" severity="secondary" @click="movePinnedGroups" fluid />
-
-        <Button
-          label="Create arc-tabs group"
-          severity="secondary"
-          @click="createArcGroup"
-          fluid
-          v-tooltip.top="'Creates an arc-tabs tab group with one empty tab for scroll control. If deleted, recreated automatically.'"
-        />
-      </div>
-
-      <Message v-if="status.visible" :severity="status.type === 'success' ? 'success' : 'error'" :closable="false">
-        {{ status.message }}
-      </Message>
-    </div>
-
-    <div class="footer">v1.0 · by angrechko</div>
+    <div class="footer">v1.1 · by ancored</div>
   </div>
 </template>
 
 <style scoped>
 .popup {
-  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 0;
 }
 
 .header {
   display: flex;
-  flex-direction: row;
   align-items: center;
   justify-content: space-between;
+  padding: 16px 16px 12px;
 }
 
-.content {
+/* Tab panel inner layout */
+.tab-content {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+  padding: 4px 16px 0;
 }
 
 .setting-group {
@@ -403,20 +450,14 @@ function showStatus(message: string, type: 'success' | 'error') {
   gap: 8px;
 }
 
+/* Toggle rows */
 .toggle-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--p-surface-border);
+  padding: 6px 0;
   cursor: pointer;
-  transition: background 0.15s;
   user-select: none;
-}
-
-.toggle-row:hover {
-  background: var(--p-surface-hover);
 }
 
 .toggle-label {
@@ -441,14 +482,24 @@ function showStatus(message: string, type: 'success' | 'error') {
   color: var(--p-primary-color);
 }
 
-.input-row {
-  display: flex;
-  gap: 8px;
+/* Slider */
+:deep(.p-tabpanel) {
+  padding: 0;
+}
+
+:deep(.p-tablist) {
+  padding: 0 16px;
 }
 
 :deep(.p-slider-handle) {
   background: var(--p-primary-color) !important;
   border-color: var(--p-primary-color) !important;
+}
+
+/* Pinned groups */
+.input-row {
+  display: flex;
+  gap: 8px;
 }
 
 .groups-list {
@@ -457,7 +508,7 @@ function showStatus(message: string, type: 'success' | 'error') {
   border: 1px solid var(--p-surface-border);
   border-radius: 8px;
   overflow-y: auto;
-  max-height: 180px;
+  max-height: 160px;
 }
 
 .group-row {
@@ -473,13 +524,8 @@ function showStatus(message: string, type: 'success' | 'error') {
   border-bottom: 1px solid var(--p-surface-border);
 }
 
-.group-row:hover {
-  background: var(--p-surface-hover);
-}
-
-.group-row:active {
-  cursor: grabbing;
-}
+.group-row:hover { background: var(--p-surface-hover); }
+.group-row:active { cursor: grabbing; }
 
 .group-row.drag-over {
   outline: 2px dashed var(--p-primary-color);
@@ -502,18 +548,6 @@ function showStatus(message: string, type: 'success' | 'error') {
 .group-name {
   flex: 1;
   font-size: 13px;
-}
-
-.action-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.footer {
-  text-align: center;
-  font-size: 11px;
-  opacity: 0.4;
 }
 
 /* Housekeeping */
@@ -576,5 +610,43 @@ function showStatus(message: string, type: 'success' | 'error') {
   font-weight: 600;
   min-width: 24px;
   text-align: center;
+}
+
+/* Memory estimation formula */
+.formula-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.formula-tier {
+  font-size: 12px;
+}
+
+.formula-tier small {
+  opacity: 0.5;
+  margin-left: 3px;
+}
+
+.formula-avg {
+  font-size: 11px;
+  opacity: 0.5;
+}
+
+.section-gap {
+  margin-top: 8px;
+}
+
+/* Status message */
+.status-msg {
+  margin: 0 16px;
+}
+
+.footer {
+  text-align: center;
+  font-size: 11px;
+  opacity: 0.4;
+  padding: 8px 16px 16px;
 }
 </style>

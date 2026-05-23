@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Stacked cards — tabs shuffled like cards, frontmost is pinned/active -->
+
+  <rect width="128" height="128" rx="26" fill="#18181b"/>
+
+  <!-- Back card (oldest) -->
+  <rect x="36" y="30" width="72" height="52" rx="10" fill="#27272a"/>
+
+  <!-- Middle card -->
+  <rect x="26" y="42" width="72" height="52" rx="10" fill="#3f3f46"/>
+
+  <!-- Front card (pinned / most relevant) -->
+  <rect x="16" y="54" width="72" height="52" rx="10" fill="#7c3aed"/>
+
+  <!-- Subtle tab nub on front card -->
+  <rect x="24" y="48" width="22" height="10" rx="4" fill="#a78bfa"/>
+
+  <!-- Two lines on front card suggesting content -->
+  <rect x="26" y="72" width="44" height="5" rx="2" fill="#a78bfa" opacity="0.5"/>
+  <rect x="26" y="83" width="30" height="5" rx="2" fill="#a78bfa" opacity="0.3"/>
+</svg>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Stripe — pinned tabs have a bold left accent bar, free tab has none -->
+
+  <rect width="128" height="128" rx="26" fill="#18181b"/>
+
+  <!-- Pinned tab 1 -->
+  <rect x="26" y="22" width="76" height="22" rx="6" fill="#2d2d32"/>
+  <rect x="26" y="22" width="6"  height="22" rx="3" fill="#a78bfa"/>
+
+  <!-- Pinned tab 2 -->
+  <rect x="26" y="50" width="76" height="22" rx="6" fill="#2d2d32"/>
+  <rect x="26" y="50" width="6"  height="22" rx="3" fill="#7c3aed"/>
+
+  <!-- Free tab (no stripe, grayed out) -->
+  <rect x="26" y="84" width="76" height="22" rx="6" fill="#27272a"/>
+</svg>

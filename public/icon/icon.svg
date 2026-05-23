@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="arc-grad" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#6d28d9"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded background -->
+  <rect width="128" height="128" rx="26" fill="#18181b"/>
+
+  <!-- Arc curve — references the Arc browser origin -->
+  <path d="M 18 74 C 28 34, 100 34, 110 74"
+        stroke="url(#arc-grad)" stroke-width="11"
+        stroke-linecap="round"/>
+
+  <!-- Pinned group tab (bright, left) -->
+  <rect x="14" y="84" width="32" height="22" rx="6" fill="url(#arc-grad)"/>
+
+  <!-- Divider between pinned and free tabs -->
+  <rect x="50" y="83" width="2" height="24" rx="1" fill="#8b5cf6" opacity="0.35"/>
+
+  <!-- Free tabs (progressively dimmer = older / less visited) -->
+  <rect x="56" y="84" width="26" height="22" rx="6" fill="#3f3f46"/>
+  <rect x="86" y="84" width="26" height="22" rx="6" fill="#27272a"/>
+</svg>

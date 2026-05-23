@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Group box — pinned tabs live inside a rounded container, free tab sits below standalone -->
+
+  <rect width="128" height="128" rx="26" fill="#18181b"/>
+
+  <!-- Group container for pinned tabs -->
+  <rect x="16" y="14" width="96" height="74" rx="12" stroke="#6d28d9" stroke-width="2" fill="#1e1b2e"/>
+
+  <!-- Pinned tab 1 -->
+  <rect x="26" y="24" width="76" height="22" rx="6" fill="#7c3aed"/>
+
+  <!-- Pinned tab 2 -->
+  <rect x="26" y="52" width="76" height="22" rx="6" fill="#7c3aed" opacity="0.55"/>
+
+  <!-- Free tab below the container -->
+  <rect x="26" y="100" width="76" height="22" rx="6" fill="#3f3f46"/>
+</svg>

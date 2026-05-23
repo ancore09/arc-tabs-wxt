@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <rect width="128" height="128" rx="26" fill="#18181b"/>
+
+  <!-- Pinned tabs (inside bracket) -->
+  <rect x="42" y="24" width="60" height="22" rx="6" fill="#7c3aed"/>
+  <rect x="42" y="52" width="60" height="22" rx="6" fill="#7c3aed" opacity="0.55"/>
+
+  <!-- Bracket [ spanning the two pinned tabs -->
+  <path d="M 36 18 L 26 18 L 26 80 L 36 80"
+        stroke="#a78bfa" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Free tab (outside bracket, grayed out) -->
+  <rect x="42" y="84" width="60" height="22" rx="6" fill="#3f3f46"/>
+</svg>

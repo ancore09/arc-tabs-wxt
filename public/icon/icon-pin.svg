@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Pin — a push-pin anchors the left group, tabs fan out beneath -->
+
+  <rect width="128" height="128" rx="26" fill="#18181b"/>
+
+  <!-- Tab bar -->
+  <rect x="12" y="80" width="32" height="24" rx="6" fill="#7c3aed"/>
+  <rect x="48" y="80" width="32" height="24" rx="6" fill="#3f3f46"/>
+  <rect x="84" y="80" width="32" height="24" rx="6" fill="#27272a"/>
+
+  <!-- Pin body (teardrop) centered over pinned tab -->
+  <circle cx="28" cy="46" r="16" fill="#a78bfa"/>
+  <path d="M 20 56 Q 28 78 28 78 Q 28 78 36 56" fill="#a78bfa"/>
+
+  <!-- Pin hole -->
+  <circle cx="28" cy="46" r="6" fill="#18181b"/>
+</svg>

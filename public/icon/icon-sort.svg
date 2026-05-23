@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="g" x1="14" y1="64" x2="114" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="45%" stop-color="#7c3aed"/>
+      <stop offset="46%" stop-color="#3f3f46"/>
+      <stop offset="100%" stop-color="#27272a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Sort / organise — tabs as horizontal bars being sorted left-to-right,
+       left side bright (pinned group), right side dim (free tabs),
+       a small arrow shows the sorting direction -->
+
+  <rect width="128" height="128" rx="26" fill="#18181b"/>
+
+  <!-- Tab bars, left-aligned with decreasing width showing sorted order -->
+  <rect x="14" y="28" width="100" height="14" rx="5" fill="url(#g)"/>
+  <rect x="14" y="48" width="100" height="14" rx="5" fill="url(#g)" opacity="0.85"/>
+  <rect x="14" y="68" width="100" height="14" rx="5" fill="url(#g)" opacity="0.5"/>
+  <rect x="14" y="88" width="100" height="14" rx="5" fill="url(#g)" opacity="0.25"/>
+
+  <!-- Vertical divider separating pinned zone -->
+  <rect x="60" y="24" width="2" height="82" rx="1" fill="#a78bfa" opacity="0.3"/>
+
+  <!-- Arrow pointing right-to-left (new tabs move toward pinned zone) -->
+  <path d="M 90 112 L 72 112" stroke="#a78bfa" stroke-width="5" stroke-linecap="round"/>
+  <path d="M 79 105 L 72 112 L 79 119" stroke="#a78bfa" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
