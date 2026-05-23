@@ -90,34 +90,25 @@ export default defineBackground(() => {
   browser.tabs.onCreated.addListener(async (tab) => {
     if (isRestoringSession) return;
 
+    console.log(tab);
+
     if (tab.openerTabId !== undefined && tab.pendingUrl !== 'chrome://newtab/') {
       const openerTab = await browser.tabs.get(tab.openerTabId);
-      if (!openerTab.pinned) return;
+      if (!openerTab.pinned && openerTab.index == tab.index - 1) {
+        console.log('not moving tab - it was opened from another not pinned tab');
+        return;
+      }
     }
+
+    console.log('moving tab');
 
     setTimeout(() => {
       browser.tabs.get(tab.id!, (currentTab) => {
         if (currentTab && !browser.runtime.lastError) {
-          moveTabAfterGroups(currentTab.id!);
+          moveTabAfterGroups(currentTab);
         }
       });
     }, 100);
-  });
-
-  browser.webNavigation.onCommitted.addListener(async (details) => {
-    if (details.frameId !== 0) return;
-    if (details.transitionType !== 'auto_bookmark') return;
-    if (isRestoringSession) return;
-
-    const { url, tabId } = details;
-
-    try {
-      await browser.tabs.goBack(tabId);
-    } catch {
-      await browser.tabs.update(tabId, { url: 'chrome://newtab' });
-    }
-
-    await browser.tabs.create({ url, active: true });
   });
 
   async function movePinnedGroupsToStart() {
@@ -142,7 +133,7 @@ export default defineBackground(() => {
     }
   }
 
-  async function findPositionAfterGroups(): Promise<number> {
+  async function findPositionAfterGroups(newTab: Browser.tabs.Tab, openerTab?: Browser.tabs.Tab): Promise<number> {
     const { pinnedGroups: pinnedTitles } = settings;
     if (!pinnedTitles?.length) return 0;
 
@@ -161,13 +152,27 @@ export default defineBackground(() => {
       }
     });
 
-    return maxIndex >= 0 ? maxIndex + 1 : 0;
+    var candidateIndex = maxIndex + 1;
+
+    // туду
+    // делать -1 только если вкладка открывается рядом с pinned вкладкой
+    // если вкладка открывается другим способон, но в браузере открыта pinned вкладка - не делать -1, тк такая новая вкладка откроется в конце
+
+    if (newTab.index < candidateIndex)
+      candidateIndex -= 1;
+
+    return candidateIndex >= 0 ? candidateIndex : 0;
   }
 
-  async function moveTabAfterGroups(tabId: number) {
+  async function moveTabAfterGroups(tab: Browser.tabs.Tab) {
     try {
-      const targetIndex = await findPositionAfterGroups();
-      await browser.tabs.move(tabId, { index: targetIndex });
+      const openerTab = tab.openerTabId ? await browser.tabs.get(tab.openerTabId) : undefined;
+
+      const targetIndex = await findPositionAfterGroups(tab, openerTab);
+
+      console.log('calculated position: ', targetIndex);
+
+      await browser.tabs.move(tab.id!, { index: targetIndex });
 
       // Dirty hack to counteract tab bar auto-scroll:
       // focus the first non-pinned tab (moves scroll there), then re-focus target
