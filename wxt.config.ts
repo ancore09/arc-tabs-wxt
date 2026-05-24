@@ -6,6 +6,6 @@ export default defineConfig({
   manifest: {
     name: 'arc-tabs',
     description: 'Opens new tabs below pinned tab groups',
-    permissions: ['tabs', 'tabGroups', 'storage', 'webNavigation'],
+    permissions: ['tabs', 'tabGroups', 'storage', 'webNavigation', 'contextMenus'],
   },
 });

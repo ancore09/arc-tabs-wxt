@@ -143,6 +143,25 @@ export default defineBackground(() => {
     return true;
   });
 
+  // Context menu — "Move to top" on tab right-click
+  browser.runtime.onInstalled.addListener(() => {
+    browser.contextMenus.create({
+      id: 'arc-tabs-move-to-top',
+      title: 'Move to top',
+      contexts: ['page'],
+    });
+  });
+
+  browser.contextMenus.onClicked.addListener(async (info, tab) => {
+    if (info.menuItemId !== 'arc-tabs-move-to-top' || !tab?.id) return;
+    try {
+      const targetIndex = await findPositionAfterGroups(tab);
+      await browser.tabs.move(tab.id, { index: targetIndex });
+    } catch (error) {
+      console.error('Error moving tab to top:', error);
+    }
+  });
+
   browser.runtime.onStartup.addListener(() => {
     // On browser launch reset isActive from the stored preference,
     // then hold in restoration mode until the startup delay expires.
